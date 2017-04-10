@@ -1,5 +1,6 @@
 # Assignment 1: Reverse-mode Automatic Differentiation
 
+![build](https://travis-ci.org/yupbank/assignment1.svg?branch=master)
 In this assignment, we would implement reverse-mode auto-diff.
 
 Our code should be able to construct simple expressions, e.g. y=x1*x2+x1,
