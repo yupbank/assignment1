@@ -149,6 +149,26 @@ class MulOp(Op):
         a, b = node.inputs
         return [output_grad*b, output_grad*a]
 
+class PowerByConstOp(Op):
+    """Op to element-wise multiply a nodes by a constant."""
+    def __call__(self, node_A, const_val):
+        new_node = Op.__call__(self)
+        new_node.const_attr = const_val
+        new_node.inputs = [node_A]
+        new_node.name = "(%s^%s)" % (node_A.name, str(const_val))
+        return new_node
+
+    def compute(self, node, input_vals):
+        """Given values of input node, return result of element-wise multiplication."""
+        """TODO: Your code here"""
+        assert len(input_vals) == 1
+        return input_vals[0] ** node.const_attr
+
+    def gradient(self, node, output_grad):
+        """Given gradient of multiplication node, return gradient contribution to input."""
+        """TODO: Your code here"""
+        return [power_byconst_op(output_grad, node.const_attr-1)*node.const_attr]
+
 class MulByConstOp(Op):
     """Op to element-wise multiply a nodes by a constant."""
     def __call__(self, node_A, const_val):
@@ -257,7 +277,6 @@ class OnesLikeOp(Op):
 
     def compute(self, node, input_vals):
         """Returns ones_like of the same shape as input."""
-        assert(isinstance(input_vals[0], np.ndarray))
         return np.ones(input_vals[0].shape)
 
     def gradient(self, node, output_grad):
@@ -273,39 +292,73 @@ class SigmoidOp(Op):
         return new_node
 
     def compute(self, node, input_vals):
-        assert(isinstance(input_vals[0], np.ndarray))
-        return np.exp(-np.logaddexp(0, -x))
+        return np.exp(-np.logaddexp(0, -input_vals[0]))
 
     def gradient(self, node, output_grad):
-        return output_grad*sigmoid_op(node.inputs[0])*(-1*sigmoid_op(node.inputs[0])+1)
+        return output_grad*sigmoid_op(node.inputs[0])*(-1*sigmoid_op(node.inputs[0])+1),
 
-class CrossEntropyOp(Op):
+class LogOp(Op):
     """Op that calculate cross entropy."""
-    def __call__(self, node_A, node_B):
+    def __call__(self, node_A):
         """Creates a node that represents a cross entropy between node_A ans node_B."""
         new_node = Op.__call__(self)
-        new_node.inputs = [node_A, node_B]
-        new_node.name = "Cross Entropy(%s, %s)" % (node_A.name, node_B.name)
+        new_node.inputs = [node_A]
+        new_node.name = "Log(%s)" % (node_A.name)
         return new_node
 
     def compute(self, node, input_vals):
         assert(isinstance(input_vals[0], np.ndarray))
-        return -input_vals[0]*np.log(input_vals[1]) - (input_vals[0]-1)*np.log(1-input_vals[1])
+        return np.log(input_vals[0])
 
     def gradient(self, node, output_grad):
-        a, b = node.inputs
-        return [1, a/b+(1-a)/(1-b)]
+        a = node.inputs[0]
+        return [power_byconst_op(a, -1)*output_grad]
+
+class ReduceSum(Op):
+    def __call__(self, node_A):
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A]
+        new_node.name = "Reduce Sum(%s)"%(node_A.name)
+        return new_node
+
+    def compute(self, node, input_vals):
+        assert(isinstance(input_vals[0], np.ndarray))
+        return np.sum(input_vals[0], axis=1)
+
+    def gradient(self, node, output_grad):
+        a = node.inputs[0]
+        return output_grad*oneslike_op(a),
+
+class ReduceMean(Op):
+    def __call__(self, node_A):
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A]
+        new_node.name = "Reduce mean(%s)"%(node_A.name)
+        return new_node
+
+    def compute(self, node, input_vals):
+        assert(isinstance(input_vals[0], np.ndarray))
+        return np.mean(input_vals[0])
+
+    def gradient(self, node, output_grad):
+        a = node.inputs[0]
+        return output_grad*oneslike_op(a),
 
 # Create global singletons of operators.
 add_op = AddOp()
 mul_op = MulOp()
 add_byconst_op = AddByConstOp()
 mul_byconst_op = MulByConstOp()
+power_byconst_op = PowerByConstOp()
 matmul_op = MatMulOp()
 placeholder_op = PlaceholderOp()
 oneslike_op = OnesLikeOp()
 zeroslike_op = ZerosLikeOp()
 sigmoid_op = SigmoidOp()
+reduce_sum = ReduceSum()
+reduce_mean = ReduceMean()
+log_op = LogOp()
+
 
 class Executor:
     """Executor computes values for a given subset of nodes in a computation graph.""" 
