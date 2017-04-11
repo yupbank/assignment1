@@ -197,14 +197,15 @@ def test_lr():
 
     y_pred = ad.sigmoid_op(ad.matmul_op(x, w))
     cross_entropy = ad.reduce_mean(-1 * ad.reduce_sum(y*ad.log_op(y_pred)))
-    grad_w  = ad.gradients(cross_entropy, [w])
-    executor = ad.Executor(grad_w)
+    [grad_w]  = ad.gradients(cross_entropy, [w])
+    executor = ad.Executor([grad_w])
     x_val = np.array([[1, 2], [3, 4], [5, 6]]) # 3x2
     y_val = np.array([1, 0, 1]) # 3x1
     w_val = np.random.rand(2, 1)
+    w_val_origin = np.copy(w_val)
     learning_rate = 0.0001
     epochs = 5
     for i in xrange(epochs):
         [grad_w_val] = executor.run(feed_dict={x:x_val, y:y_val, w: w_val})
         w_val = w_val - grad_w_val*learning_rate
-    print w_val
+    assert not np.array_equal(w_val, w_val_origin)
