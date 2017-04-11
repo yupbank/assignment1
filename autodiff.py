@@ -212,7 +212,7 @@ class MatMulOp(Op):
         """
         """TODO: Your code here"""
         a, b = node.inputs
-        return [self(output_grad, b, False, True), self(a, output_grad, True, False)]
+        return [matmul_op(output_grad, b, False, True), matmul_op(a, output_grad, True, False)]
 
 class PlaceholderOp(Op):
     """Op to feed value to a nodes."""
@@ -263,6 +263,39 @@ class OnesLikeOp(Op):
     def gradient(self, node, output_grad):
         return [zeroslike_op(node.inputs[0])]
 
+class SigmoidOp(Op):
+    """Op that calculate sigmoid."""
+    def __call__(self, node_A):
+        """Creates a node that represents a sigmoid array of same shape as node_A."""
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A]
+        new_node.name = "Sigmoid(%s)" % node_A.name
+        return new_node
+
+    def compute(self, node, input_vals):
+        assert(isinstance(input_vals[0], np.ndarray))
+        return np.exp(-np.logaddexp(0, -x))
+
+    def gradient(self, node, output_grad):
+        return output_grad*sigmoid_op(node.inputs[0])*(-1*sigmoid_op(node.inputs[0])+1)
+
+class CrossEntropyOp(Op):
+    """Op that calculate cross entropy."""
+    def __call__(self, node_A, node_B):
+        """Creates a node that represents a cross entropy between node_A ans node_B."""
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A, node_B]
+        new_node.name = "Cross Entropy(%s, %s)" % (node_A.name, node_B.name)
+        return new_node
+
+    def compute(self, node, input_vals):
+        assert(isinstance(input_vals[0], np.ndarray))
+        return -input_vals[0]*np.log(input_vals[1]) - (input_vals[0]-1)*np.log(1-input_vals[1])
+
+    def gradient(self, node, output_grad):
+        a, b = node.inputs
+        return [1, a/b+(1-a)/(1-b)]
+
 # Create global singletons of operators.
 add_op = AddOp()
 mul_op = MulOp()
@@ -272,6 +305,7 @@ matmul_op = MatMulOp()
 placeholder_op = PlaceholderOp()
 oneslike_op = OnesLikeOp()
 zeroslike_op = ZerosLikeOp()
+sigmoid_op = SigmoidOp()
 
 class Executor:
     """Executor computes values for a given subset of nodes in a computation graph.""" 
@@ -323,11 +357,12 @@ def gradients(output_node, node_list):
     """
 
     # a map from node to a list of gradient contributions from each output node
-    node_to_output_grads_list = {}
+    from collections import defaultdict
+    node_to_output_grads_list = defaultdict(list)
     # Special note on initializing gradient of output_node as oneslike_op(output_node):
     # We are really taking a derivative of the scalar reduce_sum(output_node)
     # instead of the vector output_node. But this is the common case for loss function.
-    node_to_output_grads_list[output_node] = [oneslike_op(output_node)]
+    node_to_output_grads_list[output_node].append(oneslike_op(output_node))
     # a map from node to the gradient of that node
     node_to_output_grad = {}
     # Traverse graph in reverse topological order given the output_node that we are taking gradient wrt.
@@ -335,15 +370,12 @@ def gradients(output_node, node_list):
 
     """TODO: Your code here"""
     for node in reverse_topo_order:
-        grad = sum(node_to_output_grads_list[node])
+        grad = sum_node_list(node_to_output_grads_list[node])
         node_to_output_grad[node] = grad
         grads = node.op.gradient(node, grad)
         if grads:
             for i, j in zip(node.inputs, grads):
-                if i not in node_to_output_grads_list:
-                    node_to_output_grads_list[i] = [j]
-                else:
-                    node_to_output_grads_list[i].append(j)
+                node_to_output_grads_list[i].append(j)
 
     # Collect results for gradients requested.
     grad_node_list = [node_to_output_grad[node] for node in node_list]
@@ -379,7 +411,6 @@ def topo_sort_dfs(node, visited, topo_order):
 
 def sum_node_list(node_list):
     """Custom sum function in order to avoid create redundant nodes in Python sum implementation."""
-    result = node_list[0]
-    for i in range(1, len(node_list)):
-        result = result + node_list[i]
-    return result
+    from operator import add
+    from functools import reduce
+    return reduce(add, node_list)
