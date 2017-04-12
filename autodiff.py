@@ -315,34 +315,21 @@ class LogOp(Op):
         return [power_byconst_op(a, -1)*output_grad]
 
 class ReduceSum(Op):
-    def __call__(self, node_A):
+    def __call__(self, node_A, axis=0):
         new_node = Op.__call__(self)
         new_node.inputs = [node_A]
-        new_node.name = "Reduce Sum(%s)"%(node_A.name)
+        new_node.const_val = axis
+        new_node.name = "Reduce Sum(%s, axis=%s)"%(node_A.name, axis)
         return new_node
 
     def compute(self, node, input_vals):
         assert(isinstance(input_vals[0], np.ndarray))
-        return np.sum(input_vals[0], axis=1)
+        return np.sum(input_vals[0], axis=node.const_val)
 
     def gradient(self, node, output_grad):
         a = node.inputs[0]
         return output_grad*oneslike_op(a),
 
-class ReduceMean(Op):
-    def __call__(self, node_A):
-        new_node = Op.__call__(self)
-        new_node.inputs = [node_A]
-        new_node.name = "Reduce mean(%s)"%(node_A.name)
-        return new_node
-
-    def compute(self, node, input_vals):
-        assert(isinstance(input_vals[0], np.ndarray))
-        return np.mean(input_vals[0])
-
-    def gradient(self, node, output_grad):
-        a = node.inputs[0]
-        return output_grad*oneslike_op(a),
 
 # Create global singletons of operators.
 add_op = AddOp()
@@ -356,7 +343,6 @@ oneslike_op = OnesLikeOp()
 zeroslike_op = ZerosLikeOp()
 sigmoid_op = SigmoidOp()
 reduce_sum = ReduceSum()
-reduce_mean = ReduceMean()
 log_op = LogOp()
 
 

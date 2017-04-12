@@ -194,18 +194,18 @@ def test_lr():
     x = ad.Variable(name = "x")
     w = ad.Variable(name = "w")
     y = ad.Variable(name = "y")
-
-    y_pred = ad.sigmoid_op(ad.matmul_op(x, w))
-    cross_entropy = ad.reduce_mean(-1 * ad.reduce_sum(y*ad.log_op(y_pred)))
+    y_logit = ad.matmul_op(x, w)
+    y_pred = ad.sigmoid_op(y_logit)
+    cross_entropy = -1* ad.reduce_sum(y*ad.log_op(y_pred)+(1+-1*y)*ad.log_op(1+-1*y_pred), axis=0)
     [grad_w]  = ad.gradients(cross_entropy, [w])
-    executor = ad.Executor([grad_w])
-    x_val = np.array([[1, 2], [3, 4], [5, 6]]) # 3x2
+    executor = ad.Executor([grad_w, y_pred])
+    x_val = np.array([[1, 0], [0, 1], [1, 0.1]]) # 3x2
     y_val = np.array([1, 0, 1]) # 3x1
+    y_val = y_val[:,np.newaxis]
     w_val = np.random.rand(2, 1)
-    w_val_origin = np.copy(w_val)
     learning_rate = 0.0001
-    epochs = 5
+    epochs = 15
     for i in xrange(epochs):
-        [grad_w_val] = executor.run(feed_dict={x:x_val, y:y_val, w: w_val})
+        [grad_w_val, y_pred_val] = executor.run(feed_dict={x:x_val, y:y_val, w: w_val})
         w_val = w_val - grad_w_val*learning_rate
-    assert not np.array_equal(w_val, w_val_origin)
+    assert np.array_equal(y_pred_val.argsort(), y_val.argsort())
